@@ -36,7 +36,7 @@ test('모든 이미지에 대체 텍스트가 있고 실제로 불러와진다',
 });
 
 test('내부 링크가 모두 열린다 (체험판·정책·지원·OG 이미지)', async ({ page, request }) => {
-  for (const p of ['/play/', '/privacy.html', '/support.html', '/assets/og.png', '/assets/icon.png', '/assets/icon-1024.png']) {
+  for (const p of ['/play/', '/privacy.html', '/support.html', '/copyright.html', '/assets/og.png', '/assets/icon.png', '/assets/icon-1024.png']) {
     const r = await request.get(p); expect(r.status(), p).toBe(200);
   }
   await page.goto('/');
@@ -69,4 +69,19 @@ test('공유 미리보기 메타 태그', async ({ page }) => {
   await page.goto('/');
   for (const p of ['og:title', 'og:description', 'og:image']) expect(await page.locator(`meta[property="${p}"]`).getAttribute('content')).toBeTruthy();
   expect(await page.locator('meta[name="description"]').getAttribute('content')).toContain('천하일통');
+});
+
+test('저작권 안내: 하단에서 들어가고 뒤로 가기·직접 접속이 된다', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('footer')).toContainText('© 2026 양인석. All rights reserved.');
+  await page.locator('footer').getByRole('link', { name: '저작권 및 이용안내' }).first().click();
+  await expect(page).toHaveURL(/\/copyright\.html$/);
+  await expect(page.getByRole('heading', { level: 1, name: '저작권 및 이용안내' })).toBeVisible();
+  for (const h of ['기존 이용허락은 철회하지 않습니다', 'GitHub 저장소', '법령이 허용하는 이용']) await expect(page.getByText(h, { exact: false }).first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto('/copyright.html'); await page.reload();
+  await expect(page.getByRole('link', { name: /천하일통 홈/ })).toHaveAttribute('href', './');
+  for (const p of ['/privacy.html', '/support.html']) { await page.goto(p); await expect(page.getByRole('link', { name: '저작권 및 이용안내' })).toBeVisible(); }
 });

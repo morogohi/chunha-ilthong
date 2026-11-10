@@ -28,7 +28,9 @@ Unity 게임 로직(`unity/Assets/Chunha/Core`)은 UnityEngine을 참조하지 �
 
 Unity 빌드는 라이선스가 필요해 수동 워크플로(`Unity build (manual)`)로 분리했다. 저장소 Secrets에 `UNITY_LICENSE`, `UNITY_EMAIL`, `UNITY_PASSWORD`를 넣고 Actions 탭에서 실행한다.
 
-## 저작권
+## 저작권 및 이용조건
 
-게임 코드·기획·아트 © 2026 천하일통 개발팀. All rights reserved. 이 저장소는 열람용으로 공개되며 별도 허락 없이 재배포·상업적 이용을 할 수 없다.
-포함된 글꼴 Noto Sans CJK KR은 SIL Open Font License 1.1을 따른다 (`unity/Assets/Chunha/Resources/Fonts/OFL-1.1.txt`).
+- **저작권자:** 양인석 (Inseok Yang, GitHub 계정 morogohi) · © 2026 · All rights reserved.
+- 자체 제작한 게임 코드·기획·아트·문서의 복제·수정·재배포 및 별도 서비스로의 이용은 사전 서면 허락이 필요하다. 저장소 공개는 오픈소스 이용허락이 아니며, GitHub 이용약관에 따른 열람·포크는 가능하다.
+- 제3자 자료는 각 권리자의 조건을 따른다. 포함된 글꼴 Noto Sans CJK KR은 SIL Open Font License 1.1을 따른다 (`unity/Assets/Chunha/Resources/Fonts/OFL-1.1.txt`). 전체 목록: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+- 상세 안내: [저작권 및 이용안내](https://morogohi.github.io/chunha-ilthong/copyright.html) · [COPYRIGHT.md](COPYRIGHT.md) · 기존 [LICENSE.md](LICENSE.md)
