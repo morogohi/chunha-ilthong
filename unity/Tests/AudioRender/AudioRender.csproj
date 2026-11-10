@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 코드로 합성한 효과음·배경음악을 WAV로 뽑아 검사한다 (Unity 없이) -->
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><LangVersion>9.0</LangVersion><Nullable>disable</Nullable><ImplicitUsings>disable</ImplicitUsings></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../UnityStubCheck/UnityStubCheck.csproj" /></ItemGroup>
+</Project>

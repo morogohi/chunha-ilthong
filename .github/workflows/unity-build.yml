@@ -1,0 +1,35 @@
+# Unity 라이선스가 필요한 수동 빌드.
+# 저장소 Settings → Secrets 에 UNITY_LICENSE(.ulf 내용), UNITY_EMAIL, UNITY_PASSWORD 를 넣은 뒤 Actions 탭에서 실행한다.
+name: Unity build (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Android 또는 iOS'
+        required: true
+        default: 'Android'
+        type: choice
+        options: [Android, iOS]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { lfs: false }
+      - uses: actions/cache@v4
+        with:
+          path: unity/Library
+          key: Library-${{ inputs.target }}-${{ hashFiles('unity/Assets/**', 'unity/Packages/**', 'unity/ProjectSettings/**') }}
+          restore-keys: Library-${{ inputs.target }}-
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          unityVersion: auto
+          targetPlatform: ${{ inputs.target }}
+          buildMethod: Chunha.EditorTools.ChunhaSetup.CIBuild
+      - uses: actions/upload-artifact@v4
+        with: { name: build-${{ inputs.target }}, path: build }

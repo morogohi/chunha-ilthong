@@ -1,0 +1,26 @@
+# Unity
+unity/[Ll]ibrary/
+unity/[Tt]emp/
+unity/[Oo]bj/
+unity/[Bb]uild/
+unity/[Bb]uilds/
+unity/[Ll]ogs/
+unity/[Uu]ser[Ss]ettings/
+unity/*.csproj
+unity/*.sln
+unity/.vs/
+# .NET test projects
+**/bin/
+**/obj/
+# Node / Playwright
+**/node_modules/
+**/test-results/
+**/playwright-report/
+web-prototype/dist/
+web-prototype/reports/
+site-tests/site-e2e.json
+site-tests/shots/
+# misc
+.DS_Store
+*.log
+out/

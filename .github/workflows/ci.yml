@@ -1,0 +1,56 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+  workflow_dispatch:
+jobs:
+  unity-core:
+    name: Unity 코어 로직 · 스텁 컴파일 · 오디오
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - name: 코어 테스트 (TS 원본과 비트 단위 일치 포함)
+        working-directory: unity/Tests/Chunha.Tests
+        run: dotnet run -c Release
+      - name: Presentation/Editor 스크립트 컴파일 (UnityEngine 스텁)
+        working-directory: unity/Tests/UnityStubCheck
+        run: dotnet build -c Release -warnaserror:false
+      - name: 절차적 사운드 렌더 (클리핑 검사)
+        working-directory: unity/Tests/AudioRender
+        run: dotnet run -c Release -- out
+      - uses: actions/upload-artifact@v4
+        with: { name: procedural-audio, path: unity/Tests/AudioRender/out/*.wav, retention-days: 7 }
+
+  web-prototype:
+    name: 브라우저 체험판 (단위 · 시뮬레이션 · E2E)
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: web-prototype } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: npm run build
+      - run: npx vitest run
+      - name: 골든 트레이스 재생성 → C# 기준값과 비교
+        run: |
+          mkdir -p reports
+          npx vitest run --config scripts/vitest.scripts.ts scripts/golden.test.ts
+          node -e "const a=require('./reports/golden.json'),b=require('../unity/Tests/Chunha.Tests/golden.json');if(JSON.stringify(a)!==JSON.stringify(b)){console.error('golden mismatch');process.exit(1)}"
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+
+  site:
+    name: 홍보 사이트 E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - working-directory: site-tests
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+          npx playwright test

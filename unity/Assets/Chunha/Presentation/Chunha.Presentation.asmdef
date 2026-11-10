@@ -1,0 +1,14 @@
+{
+  "name": "Chunha.Presentation",
+  "rootNamespace": "Chunha",
+  "references": ["Chunha.Core", "UnityEngine.UI"],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

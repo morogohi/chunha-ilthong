@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Unity 없이 Presentation 스크립트가 컴파일되는지 확인한다. UnityEngine API는 Stubs/의 대체 선언을 쓴다. -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <NoWarn>CS0414;CS0169;CS0649;CS0067</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Assets/Chunha/Core/**/*.cs" Link="Core/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../../Assets/Chunha/Presentation/**/*.cs" Link="Presentation/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../../Assets/Chunha/Editor/**/*.cs" Link="Editor/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

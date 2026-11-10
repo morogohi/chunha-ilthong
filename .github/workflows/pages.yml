@@ -1,0 +1,29 @@
+name: Deploy site to GitHub Pages
+on:
+  push: { branches: [main], paths: ['site/**', 'web-prototype/**', '.github/workflows/pages.yml'] }
+  workflow_dispatch:
+permissions: { contents: read, pages: write, id-token: write }
+concurrency: { group: pages, cancel-in-progress: true }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: 체험판 최신 빌드를 site/play 에 넣기
+        working-directory: web-prototype
+        run: |
+          npm ci
+          npm run build
+          cp dist/index.html ../site/play/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: site }
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: { name: github-pages, url: '${{ steps.d.outputs.page_url }}' }
+    steps:
+      - id: d
+        uses: actions/deploy-pages@v4
