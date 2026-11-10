@@ -230,11 +230,67 @@ namespace Chunha
             if (busy || inBattle) return;
             var c = S.City(selected);
             var dests = Neighbors(S, c.id).Where(n => S.City(n).faction == S.player).Select(S.City).ToList();
-            var o = CityOfficers(S, c.id, S.player).FirstOrDefault(x => !x.acted);
-            if (dests.Count == 0 || o == null) { Toast("수송할 인접 아군 도시가 없다."); return; }
-            // 가장 병력이 적은(위협받는) 인접 아군 도시로 병력 절반, 금·병량 1/3을 보낸다
+            var o = CityOfficers(S, c.id, S.player).Where(x => !x.acted).OrderByDescending(x => x.stats.pol).FirstOrDefault();
+            if (dests.Count == 0) { Toast("수송할 인접 아군 도시가 없다."); return; }
+            if (o == null) { Toast("이번 달 움직일 장수가 없다."); return; }
+            // 기본값은 제안일 뿐: 병력이 가장 적은 인접 아군 성으로 병력 절반, 금·병량 1/3. 실행 전에 바꿀 수 있다
             var dst = dests.OrderBy(d => d.troops).First();
-            Apply(Commands.Transport(S, S.player, o.id, dst.id, System.Math.Floor(c.troops / 2), System.Math.Floor(c.gold / 3), System.Math.Floor(c.food / 3)));
+            tplan = new TransportPlan { from = c.id, to = dst.id, officer = o.id, troops = 50, gold = 33, food = 33 };
+            sheet?.Close();
+            sheet = new Sheet(canvas.transform, this, $"{c.name}에서 수송", 0.82f);
+            sheet.onClosed = RefreshAll;
+            FillTransport();
+        }
+
+        class TransportPlan { public string from, to, officer; public int troops, gold, food; }   // 수량은 % (0~100)
+        TransportPlan tplan;
+
+        void FillTransport()
+        {
+            if (!sheetOpen || tplan == null) return;
+            var root = sheet.content;
+            UIKit.Clear(root);
+            var c = S.City(tplan.from);
+            double Amount(double have, int pct, double step) => System.Math.Floor(have * pct / 100.0 / step) * step;
+            double tr = Amount(c.troops, tplan.troops, 500), gd = Amount(c.gold, tplan.gold, 50), fd = Amount(c.food, tplan.food, 100);
+
+            Info(root, "목적지 (인접한 아군 성)");
+            var drow = UIKit.Rect("Dests", root); UIKit.Size(drow, -1, 110); UIKit.HList(drow, 14);
+            foreach (var d in Neighbors(S, c.id).Where(n => S.City(n).faction == S.player))
+            {
+                var dd = d; bool on = tplan.to == d;
+                UIKit.Button(drow, $"{CityName(S, d)} · {Fmt(S.City(d).troops)}", () => { tplan.to = dd; FillTransport(); }, on ? Palette.Ink : Palette.Paper2, on ? Palette.Paper : Palette.Ink, 34);
+            }
+            Info(root, "맡을 장수 (이번 달 행동을 쓴다)");
+            var orow = UIKit.Rect("Officers", root); UIKit.Size(orow, -1, 110); UIKit.HList(orow, 14);
+            foreach (var o in CityOfficers(S, c.id, S.player).Where(x => !x.acted))
+            {
+                var oo = o; bool on = tplan.officer == o.id;
+                UIKit.Button(orow, o.name, () => { tplan.officer = oo.id; FillTransport(); }, on ? Palette.Ink : Palette.Paper2, on ? Palette.Paper : Palette.Ink, 34);
+            }
+            void Presets(string label, double have, double now, System.Action<int> set)
+            {
+                Info(root, $"{label} <b>{Fmt(now)}</b> / {Fmt(have)}");
+                var row = UIKit.Rect(label, root); UIKit.Size(row, -1, 100); UIKit.HList(row, 12);
+                foreach (var pct in new[] { 0, 25, 50, 75, 100 })
+                {
+                    var pp = pct;
+                    UIKit.Button(row, $"{pct}%", () => { set(pp); FillTransport(); }, Palette.Paper2, Palette.Ink, 32);
+                }
+            }
+            Presets("병력", c.troops, tr, p => tplan.troops = p);
+            Presets("금", c.gold, gd, p => tplan.gold = p);
+            Presets("병량", c.food, fd, p => tplan.food = p);
+            var who = S.Officer(tplan.officer);
+            Info(root, $"<b>{who?.name}</b>이(가) {c.name} → {CityName(S, tplan.to)}로 병력 {Fmt(tr)} · 금 {Fmt(gd)} · 병량 {Fmt(fd)}을 옮긴다.");
+            var go = UIKit.Button(root, "수송 실행", () =>
+            {
+                var p = tplan; tplan = null;
+                sheet.Close();
+                Apply(Commands.Transport(S, S.player, p.officer, p.to, tr, gd, fd));
+            }, Palette.Red, Color.white, 46);
+            UIKit.Size((RectTransform)go.transform, -1, 140);
+            go.interactable = tr + gd + fd > 0;
         }
 
         // ───────────────────────── 명령 시트

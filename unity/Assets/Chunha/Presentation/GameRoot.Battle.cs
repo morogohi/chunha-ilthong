@@ -94,7 +94,7 @@ namespace Chunha
         {
             sheet?.Close();
             busy = true;
-            PushHistory();
+            PushHistory($"{CityName(S, plan.to)} 출진 전");
             S.events.Clear();
             var from = S.City(plan.from); var to = S.City(plan.to);
             SoundKit.Play(Sfx.March);

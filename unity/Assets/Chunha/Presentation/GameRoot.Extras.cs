@@ -144,7 +144,7 @@ namespace Chunha
                 var cs = FactionCities(preview, id);
                 var ruler = preview.Officer(f.ruler);
                 var fid = id;
-                var b = UIKit.Button(root, "", () => { sheet.Close(); StartNew(fid); }, Palette.Paper2);
+                var b = UIKit.Button(root, "", () => ChooseFaction(fid), Palette.Paper2);
                 UIKit.Size((RectTransform)b.transform, -1, 190);
                 var row = UIKit.Rect("Row", b.transform).Stretch(28, 18, 28, 18);
                 var hl = UIKit.HList(row, 28); hl.childForceExpandWidth = false;
@@ -155,6 +155,27 @@ namespace Chunha
                 UIKit.Size(txt.rectTransform, 620, -1);
                 var d = UIKit.Label(row, Difficulty[id], 32, id == "liu" || id == "ma" ? Palette.Red : Palette.Ink2, TextAnchor.MiddleRight, FontStyle.Bold); UIKit.Size(d.rectTransform, 140, -1);
             }
+        }
+
+        // 저장 칸은 하나다: 진행 중인 판이 있으면 지우기 전에 묻는다
+        void ChooseFaction(string fid)
+        {
+            var saved = ActiveSave();
+            sheet.Close();
+            if (saved == null) { StartNew(fid); return; }
+            StartCoroutine(ConfirmOverwrite(saved, fid));
+        }
+
+        IEnumerator ConfirmOverwrite(GameState saved, string fid)
+        {
+            while (sheetOpen) yield return null;
+            var preview = NewGame(fid, 1);
+            sheet = new Sheet(canvas.transform, this, "새로 시작할까요?", 0.42f);
+            var root = sheet.content;
+            Info(root, $"저장 칸은 하나다. <b>{preview.Officer(preview.Faction(fid).ruler).name}</b>(으)로 시작하면 진행 중인 기록 <b>{saved.year}년 {saved.month}월 {FactionName(saved, saved.player)}</b>이(가) 지워진다.");
+            var row = UIKit.Rect("Buttons", root); UIKit.Size(row, -1, 130); UIKit.HList(row, 20);
+            UIKit.Button(row, "취소", () => sheet.Close(), Palette.Paper2, Palette.Ink, 40);
+            UIKit.Button(row, "지우고 새로 시작", () => { sheet.Close(); ClearSave(); StartNew(fid); }, Palette.Red, Color.white, 40);
         }
 
         void HideTitleScene() { if (titleScene) titleScene.gameObject.SetActive(false); }

@@ -4,7 +4,7 @@ import {
   moveOfficer, transport, setPolicy, proposeAlliance, allianceChance, sendGift, sow, schemeChance, rumor,
   startBattle, battleRound, autoResolve, canAttack, simulateWinRate, TACTIC_LABEL,
   cityOfficers, factionCities, freeOfficers, neighbors, isHostile, relation, factionName, cityName, isRuler,
-  saveLocal, loadLocal, clearLocal, History, FACTION_ORDER, SCENARIO, GRACE_MONTHS,
+  saveLocal, loadLocal, clearLocal, saveBattle, loadBattle, History, FACTION_ORDER, SCENARIO, GRACE_MONTHS,
 } from '../core';
 import type { Battle, DomesticCmd, GameState, Officer, Policy, Tactic } from '../core';
 
@@ -15,8 +15,10 @@ let modal: string | null = null; // 모달 HTML
 let battle: Battle | null = null;
 let attackPlan: { from: string; to: string; officers: string[]; troops: number } | null = null;
 let tab: 'domestic' | 'people' | 'diplomacy' | 'scheme' = 'domestic';
+let transportPlan: { from: string; to: string; officer: string; troops: number; gold: number; food: number } | null = null;
+let pendingStart: string | null = null; // 저장이 있을 때 새 군주를 고르면 먼저 확인한다
 let toastTimer = 0;
-const history = new History(3);
+const history = new History(3, true);
 
 const esc = (t: string | number) => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const fmt = (n: number) => Math.round(n).toLocaleString('ko-KR');
@@ -34,7 +36,7 @@ function toast(msg: string) {
   toastTimer = window.setTimeout(() => el.remove(), 2200);
 }
 
-function persist() { if (s) saveLocal(s); }
+function persist() { if (s) { saveLocal(s); saveBattle(battle && s ? battle : null); } }
 
 // ───────────────────────── 화면: 타이틀
 function titleView(): string {
@@ -54,11 +56,24 @@ function titleView(): string {
     <div class="historian"><span class="seal" aria-hidden="true">許</span><span class="muted small">기록관 허문이 이 시대를 적는다</span></div>
     <h1>천하일통</h1>
     <p class="lead">${SCENARIO.year}년, 시나리오 「${SCENARIO.title}」. 12개의 성을 두고 여섯 군웅이 맞선다. 한 달에 한 번, 군주로서 명령을 내려 천하를 하나로 묶어라.</p>
+    <ol class="howto small" aria-label="진행 방법"><li>지도에서 <b>도시</b>를 고른다</li><li>장수마다 <b>한 달에 한 번</b> 명령한다</li><li><b>턴 종료</b>로 다음 달로 넘긴다</li></ol>
     ${saved && !saved.over ? `<button class="act primary" data-act="continue">이어하기 — ${saved.year}년 ${saved.month}월 ${esc(factionName(saved, saved.player))}</button>` : ''}
     <h2 style="font-size:18px">군주를 고른다</h2>
     <div class="faction-list">${items}</div>
-    <p class="muted small">프로토타입 v0.1 · 12성 축소판 · 개전 후 ${GRACE_MONTHS}개월은 AI가 플레이어를 공격하지 않는다</p>
+    ${pendingStart && saved && !saved.over ? confirmOverwrite(saved, pendingStart) : ''}
+    <p class="muted small">브라우저 체험판 · 12성 축소판 · 개전 후 ${GRACE_MONTHS}개월은 AI가 플레이어를 공격하지 않는다</p>
   </main>`;
+}
+
+function confirmOverwrite(saved: GameState, f: string): string {
+  const preview = newGame(f, 1);
+  const name = preview.officers[preview.factions[f].ruler].name;
+  return `<div class="modal-bg"><div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="ow-title" aria-describedby="ow-desc">
+    <h2 id="ow-title">새로 시작할까요?</h2>
+    <p id="ow-desc" style="margin:0">저장 칸은 하나다. <b>${esc(name)}</b>(으)로 시작하면 진행 중인 기록
+      <b>${saved.year}년 ${saved.month}월 ${esc(factionName(saved, saved.player))}</b>이(가) 지워진다.</p>
+    <div class="tactics"><button class="act" data-act="start-cancel">취소</button>
+      <button class="act primary" data-act="start-confirm" data-f="${f}">지우고 새로 시작</button></div></div></div>`;
 }
 
 // ───────────────────────── 화면: 메인
@@ -141,13 +156,13 @@ function mainView(st: GameState): string {
     <div class="sheet">${cityCard(st)}</div>
     <nav class="bottombar" aria-label="턴"><div class="inner">
       <button class="act" data-act="log">기록</button>
-      <button class="act" data-act="undo" ${history.size ? '' : 'disabled'}>되돌리기 ${history.size}</button>
+      <button class="act" data-act="undo" ${history.size ? '' : 'disabled'} title="${history.size ? esc(history.nextLabel + '으로 되돌린다') : '되돌릴 기록 없음'}">되돌리기 ${history.size}</button>
       <button class="act end" data-act="end">턴 종료</button></div></nav>`;
 }
 
 // ───────────────────────── 모달
 function wrapModal(title: string, body: string, closable = true) {
-  return `<div class="modal-bg" data-act="${closable ? 'close-bg' : ''}"><div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+  return `<div class="modal-bg" data-act="${closable ? 'close-bg' : ''}"><div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}" tabindex="-1">
     ${closable ? '<button class="close" data-act="close">닫기</button>' : ''}<h2>${esc(title)}</h2>${body}</div></div>`;
 }
 
@@ -222,6 +237,33 @@ function attackSetupModal(st: GameState): string {
     <button class="act primary" data-act="atk-go" ${err ? 'disabled' : ''}>출진</button></div>`);
 }
 
+function transportModal(st: GameState): string {
+  const p = transportPlan!;
+  const c = st.cities[p.from];
+  const dests = neighbors(st, c.id).filter(n => st.cities[n].faction === st.player);
+  const os = cityOfficers(st, c.id, st.player).filter(o => !o.acted);
+  const to = st.cities[p.to];
+  const slider = (key: 'troops' | 'gold' | 'food', label: string, max: number, step: number) =>
+    `<label class="small" for="tp-${key}">${label} <b data-tp-out="${key}">${fmt(p[key])}</b> / ${fmt(max)}</label>
+     <input id="tp-${key}" class="range" type="range" min="0" max="${max}" step="${step}" value="${p[key]}" data-act="tp-amount" data-k="${key}">`;
+  const empty = !p.troops && !p.gold && !p.food;
+  return wrapModal(`${c.name}에서 수송`, `<div class="list">
+    <p class="small muted" style="margin:0">목적지 (인접한 아군 성)</p>
+    <div class="policy">${dests.map(d => `<button class="pill" data-act="tp-to" data-to="${d}" aria-pressed="${p.to === d}">${esc(cityName(st, d))} · ${fmt(st.cities[d].troops)}</button>`).join('')}</div>
+    <p class="small muted" style="margin:0">맡을 장수 (이번 달 행동을 쓴다)</p>
+    <div class="policy">${os.map(o => `<button class="pill" data-act="tp-off" data-o="${o.id}" aria-pressed="${p.officer === o.id}">${esc(o.name)}</button>`).join('')}</div>
+    ${slider('troops', '병력', c.troops, 500)}${slider('gold', '금', c.gold, 50)}${slider('food', '병량', c.food, 100)}
+    <p class="small summary" style="margin:0" data-tp-summary>${transportSummary(st)}</p>
+    <div class="tactics"><button class="act" data-act="close">취소</button>
+      <button class="act primary" data-act="tp-go" ${empty || !to ? 'disabled' : ''}>수송 실행</button></div></div>`);
+}
+
+function transportSummary(st: GameState): string {
+  const p = transportPlan!;
+  const o = st.officers[p.officer];
+  return `${esc(o?.name ?? '')}이(가) ${esc(cityName(st, p.from))} → ${esc(cityName(st, p.to))}로 병력 ${fmt(p.troops)} · 금 ${fmt(p.gold)} · 병량 ${fmt(p.food)}을 옮긴다.`;
+}
+
 function battleModal(st: GameState): string {
   const b = battle!;
   const side = (title: string, sd: Battle['attacker'], col: string) => `<div class="side"><h3>${title}</h3>
@@ -264,21 +306,43 @@ function endModal(st: GameState): string {
 }
 
 // ───────────────────────── 렌더
-function render() {
-  if (!s) { app.innerHTML = titleView(); return; }
-  app.innerHTML = mainView(s) + (modal ?? '');
+// ───────────────────────── 초점 관리 (팝업 안에 초점을 가두고, 닫으면 연 버튼으로 돌려준다)
+let lastTrigger: string | null = null;
+const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [tabindex="0"]';
+
+function selectorFor(el: Element | null): string | null {
+  if (!(el instanceof HTMLElement) || !el.dataset.act) return el instanceof HTMLElement && el.id ? `#${el.id}` : null;
+  return Object.entries(el.dataset).map(([k, v]) => `[data-${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}="${CSS.escape(v ?? '')}"]`).join('');
 }
 
-function openModal(kind: 'cmd' | 'attack' | 'battle' | 'report' | 'log' | 'end') {
+function openDialog(): HTMLElement | null { return app.querySelector<HTMLElement>('.modal'); }
+
+function render() {
+  const keep = selectorFor(document.activeElement);
+  app.innerHTML = !s ? titleView() : mainView(s) + (modal ?? '');
+  const dlg = openDialog();
+  if (!dlg) return;
+  const again = keep ? dlg.querySelector<HTMLElement>(keep) : null;
+  (again ?? dlg.querySelector<HTMLElement>(FOCUSABLE) ?? dlg).focus({ preventScroll: true });
+}
+
+function restoreFocus() {
+  const el = lastTrigger ? app.querySelector<HTMLElement>(lastTrigger) : null;
+  lastTrigger = null;
+  el?.focus({ preventScroll: true });
+}
+
+function openModal(kind: 'cmd' | 'attack' | 'transport' | 'battle' | 'report' | 'log' | 'end') {
   if (!s) return;
-  modal = kind === 'cmd' ? cmdModal(s) : kind === 'attack' ? attackSetupModal(s) : kind === 'battle' ? battleModal(s)
+  if (!modal) lastTrigger = selectorFor(document.activeElement);
+  modal = kind === 'cmd' ? cmdModal(s) : kind === 'attack' ? attackSetupModal(s) : kind === 'transport' ? transportModal(s) : kind === 'battle' ? battleModal(s)
     : kind === 'report' ? reportModal(s) : kind === 'log' ? logModal(s) : endModal(s);
   currentModal = kind;
   render();
 }
 let currentModal: string | null = null;
 const refreshModal = () => { if (currentModal) openModal(currentModal as never); else render(); };
-const closeModal = () => { modal = null; currentModal = null; render(); };
+const closeModal = () => { modal = null; currentModal = null; transportPlan = null; render(); restoreFocus(); };
 
 function result(r: { ok: boolean; msg: string }) {
   toast(r.msg);
@@ -286,9 +350,15 @@ function result(r: { ok: boolean; msg: string }) {
   refreshModal();
 }
 
-function startGame(st: GameState) {
+function startGame(st: GameState, resumed = false) {
   s = st;
+  pendingStart = null;
+  if (!resumed) { history.clear(); battle = null; }
   selected = factionCities(st, st.player).find(c => c.governor === st.factions[st.player].ruler)?.id ?? factionCities(st, st.player)[0].id;
+  if (resumed) {
+    battle = loadBattle(st);
+    if (battle) { selected = battle.city; persist(); return openModal('battle'); }
+  }
   persist();
   openModal('report');
 }
@@ -299,8 +369,14 @@ app.addEventListener('click', e => {
   const act = el.dataset.act!;
   if (act === 'close-bg' && e.target !== el) return; // 모달 안쪽 클릭은 무시
   const d = el.dataset;
-  if (act === 'start') return startGame(newGame(d.f!, (Date.now() % 2147483646) + 1));
-  if (act === 'continue') { const l = loadLocal(); if (l) startGame(l); return; }
+  if (act === 'start') {
+    const saved = loadLocal();
+    if (saved && !saved.over) { pendingStart = d.f!; return render(); }
+    return startGame(newGame(d.f!, (Date.now() % 2147483646) + 1));
+  }
+  if (act === 'start-cancel') { const f = pendingStart; pendingStart = null; lastTrigger = `[data-act="start"][data-f="${f}"]`; render(); return restoreFocus(); }
+  if (act === 'start-confirm') { clearLocal(); history.clear(); return startGame(newGame(d.f!, (Date.now() % 2147483646) + 1)); }
+  if (act === 'continue') { const l = loadLocal(); if (l) startGame(l, true); return; }
   if (!s) return;
   const st = s;
   const P = st.player;
@@ -321,11 +397,20 @@ app.addEventListener('click', e => {
     case 'transport': {
       const c = st.cities[selected];
       const dests = neighbors(st, c.id).filter(n => st.cities[n].faction === P);
-      const o = cityOfficers(st, c.id, P).find(x => !x.acted);
-      if (!dests.length || !o) return toast('수송할 인접 아군 도시가 없다.');
-      // 가장 위협받는 인접 아군 도시로 병력 절반과 금·병량 1/3을 보낸다
-      const dst = dests.map(n => st.cities[n]).sort((a, b) => b.troops - a.troops).reverse()[0];
-      return result(transport(st, P, o.id, dst.id, Math.floor(c.troops / 2), Math.floor(c.gold / 3), Math.floor(c.food / 3)));
+      const o = cityOfficers(st, c.id, P).filter(x => !x.acted).sort((a, b) => b.stats.pol - a.stats.pol)[0];
+      if (!dests.length) return toast('수송할 인접 아군 도시가 없다.');
+      if (!o) return toast('이번 달 움직일 장수가 없다.');
+      // 기본값은 제안일 뿐, 실행 전에 목적지·장수·수량을 고친다
+      const dst = dests.map(n => st.cities[n]).sort((a, b) => a.troops - b.troops)[0];
+      transportPlan = { from: c.id, to: dst.id, officer: o.id, troops: Math.floor(c.troops / 2 / 500) * 500, gold: Math.floor(c.gold / 3 / 50) * 50, food: Math.floor(c.food / 3 / 100) * 100 };
+      return openModal('transport');
+    }
+    case 'tp-to': transportPlan!.to = d.to!; return openModal('transport');
+    case 'tp-off': transportPlan!.officer = d.o!; return openModal('transport');
+    case 'tp-go': {
+      const p = transportPlan!; transportPlan = null;
+      const r = transport(st, P, p.officer, p.to, p.troops, p.gold, p.food);
+      toast(r.msg); persist(); return closeModal();
     }
     case 'attack-from': case 'attack-to': {
       let from = selected, to = '';
@@ -342,8 +427,8 @@ app.addEventListener('click', e => {
       return openModal('attack');
     }
     case 'atk-go': {
-      history.push(st);
-      try { battle = startBattle(st, P, attackPlan!); } catch (err) { return toast((err as Error).message); }
+      history.push(st, `${cityName(st, attackPlan!.to)} 출진 전`);
+      try { battle = startBattle(st, P, attackPlan!); } catch (err) { history.popEntry(); return toast((err as Error).message); }
       persist();
       return openModal('battle');
     }
@@ -360,22 +445,34 @@ app.addEventListener('click', e => {
     }
     case 'cap-free': return result(releaseCaptive(st, P, d.t!, false));
     case 'cap-kill': return result(releaseCaptive(st, P, d.t!, true));
-    case 'battle-close': battle = null; closeModal(); if (st.over) openModal('end'); return;
+    case 'battle-close': battle = null; persist(); closeModal(); if (st.over) openModal('end'); return;
     case 'log': return openModal('log');
-    case 'undo': { const prev = history.pop(); if (prev) { s = prev; persist(); toast('한 턴 전으로 되돌렸다.'); closeModal(); } return; }
+    case 'undo': {
+      const prev = history.popEntry();
+      if (prev) { s = prev.state; battle = null; persist(); toast(`${prev.label}으로 되돌렸다.`); closeModal(); }
+      return;
+    }
     case 'end': {
-      history.push(st);
+      history.push(st, `${st.year}년 ${st.month}월 턴 종료 전`);
       endTurn(st);
       persist();
       if (st.over) return openModal('end');
       return openModal('report');
     }
-    case 'new-game': clearLocal(); s = null; modal = null; currentModal = null; battle = null; return render();
+    case 'new-game': clearLocal(); history.clear(); s = null; modal = null; currentModal = null; battle = null; return render();
   }
 });
 
 app.addEventListener('input', e => {
   const el = e.target as HTMLInputElement;
+  if (el.dataset.act === 'tp-amount' && transportPlan && s) {
+    const k = el.dataset.k as 'troops' | 'gold' | 'food';
+    transportPlan[k] = Number(el.value);
+    const out = document.querySelector(`[data-tp-out="${k}"]`); if (out) out.textContent = fmt(transportPlan[k]);
+    const sum = document.querySelector('[data-tp-summary]'); if (sum) sum.innerHTML = transportSummary(s);
+    const go = document.querySelector<HTMLButtonElement>('[data-act="tp-go"]');
+    if (go) go.disabled = !transportPlan.troops && !transportPlan.gold && !transportPlan.food;
+  }
   if (el.dataset.act === 'atk-troops' && attackPlan) {
     attackPlan.troops = Number(el.value);
     const lbl = document.querySelector('label[for="troops"]');
@@ -386,8 +483,24 @@ app.addEventListener('change', e => {
   const el = e.target as HTMLInputElement;
   if (el.dataset.act === 'atk-troops') openModal('attack'); // 손을 뗀 뒤 승률 다시 계산
 });
-app.addEventListener('keydown', e => {
+document.addEventListener('keydown', e => {
   const el = e.target as HTMLElement;
+  const dlg = openDialog();
+  if (dlg && e.key === 'Escape') {
+    // 닫기 버튼이 있는 팝업만 Esc로 닫는다 (전투·엔딩은 결정을 내려야 닫힌다)
+    const closer = dlg.querySelector<HTMLElement>('[data-act="close"], [data-act="start-cancel"]');
+    if (closer) { e.preventDefault(); closer.click(); }
+    return;
+  }
+  if (dlg && e.key === 'Tab') {
+    const items = Array.from(dlg.querySelectorAll<HTMLElement>(FOCUSABLE));
+    if (!items.length) { e.preventDefault(); return; }
+    const first = items[0], last = items[items.length - 1];
+    const inside = dlg.contains(document.activeElement);
+    if (e.shiftKey && (document.activeElement === first || !inside)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (document.activeElement === last || !inside)) { e.preventDefault(); first.focus(); }
+    return;
+  }
   if ((e.key === 'Enter' || e.key === ' ') && el.matches('g[data-act="select"]')) { e.preventDefault(); el.dispatchEvent(new MouseEvent('click', { bubbles: true })); }
 });
 
@@ -395,6 +508,7 @@ app.addEventListener('keydown', e => {
 (window as unknown as { __chunha: unknown }).__chunha = {
   start: (f: string, seed: number) => startGame(newGame(f, seed)),
   state: () => s,
+  battle: () => battle,
 };
 
 render();

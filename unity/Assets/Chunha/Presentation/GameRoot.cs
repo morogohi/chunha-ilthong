@@ -30,7 +30,10 @@ namespace Chunha
         const string SaveKey = "chunha-ilthong-save-v1";
 
         public GameState S { get; private set; }
-        readonly LinkedList<GameState> history = new LinkedList<GameState>();
+        // 되돌리기: (무엇 직전인지, 그때의 상태). 저장할 때 함께 PlayerPrefs에 남겨 재실행 뒤에도 쓸 수 있다
+        readonly LinkedList<(string label, GameState state)> history = new LinkedList<(string, GameState)>();
+        const string HistoryKey = "chunha-ilthong-history-v1";
+        [Serializable] class HistorySave { public List<string> labels = new List<string>(); public List<string> states = new List<string>(); }
         string selected;
 
         Transform rig;
@@ -93,13 +96,14 @@ namespace Chunha
         public void Continue()
         {
             var s = Load();
-            if (s != null) Begin(s);
+            if (s != null) Begin(s, true);
         }
 
-        void Begin(GameState s)
+        void Begin(GameState s, bool resumed = false)
         {
             S = s;
             history.Clear();
+            if (resumed) LoadHistory();
             ClearTitle();
             HideTitleScene();
             if (map != null) Destroy(map.gameObject);
@@ -125,7 +129,7 @@ namespace Chunha
         public void Save()
         {
             if (S == null) return;
-            try { PlayerPrefs.SetString(SaveKey, JsonUtility.ToJson(S)); PlayerPrefs.Save(); }
+            try { PlayerPrefs.SetString(SaveKey, JsonUtility.ToJson(S)); SaveHistory(); PlayerPrefs.Save(); }
             catch (Exception e) { Debug.LogWarning("저장 실패: " + e.Message); }
         }
 
@@ -142,24 +146,53 @@ namespace Chunha
             catch { return null; }
         }
 
-        public static void ClearSave() { PlayerPrefs.DeleteKey(SaveKey); }
+        public static void ClearSave() { PlayerPrefs.DeleteKey(SaveKey); PlayerPrefs.DeleteKey(HistoryKey); }
 
-        void PushHistory()
+        /// <summary>끝나지 않은 저장이 있는가 (새 군주를 고를 때 덮어쓰기 확인용)</summary>
+        public static GameState ActiveSave() { var s = Load(); return s != null && !s.over ? s : null; }
+
+        void SaveHistory()
         {
-            history.AddLast(S.Clone());
+            var h = new HistorySave();
+            foreach (var (label, st) in history) { h.labels.Add(label); h.states.Add(JsonUtility.ToJson(st)); }
+            PlayerPrefs.SetString(HistoryKey, JsonUtility.ToJson(h));
+        }
+
+        void LoadHistory()
+        {
+            try
+            {
+                var h = JsonUtility.FromJson<HistorySave>(PlayerPrefs.GetString(HistoryKey, ""));
+                if (h == null) return;
+                for (int i = 0; i < h.states.Count && i < h.labels.Count; i++)
+                {
+                    var st = JsonUtility.FromJson<GameState>(h.states[i]);
+                    if (st == null || st.cities == null || st.cities.Count == 0) continue;
+                    st.AfterLoad();
+                    history.AddLast((h.labels[i], st));
+                }
+                while (history.Count > 3) history.RemoveFirst();
+            }
+            catch { history.Clear(); }
+        }
+
+        void PushHistory(string label)
+        {
+            history.AddLast((label, S.Clone()));
             while (history.Count > 3) history.RemoveFirst();
         }
 
         public void Undo()
         {
             if (busy || history.Count == 0) return;
-            S = history.Last.Value;
+            var (label, prev) = history.Last.Value;
+            S = prev;
             history.RemoveLast();
             map.Refresh(S, false);
             weather.SetMonth(S.month);
             Save();
             RefreshAll();
-            Toast("한 턴 전으로 되돌렸다.");
+            Toast($"{label}으로 되돌렸다.");
         }
 
         public void Toast(string msg) => toast.Show(msg);
@@ -220,7 +253,7 @@ namespace Chunha
         IEnumerator EndTurnRoutine()
         {
             busy = true;
-            PushHistory();
+            PushHistory($"{S.year}년 {S.month}월 턴 종료 전");
             S.events.Clear();
             var before = S.Clone();
             TurnSystem.EndTurn(S);

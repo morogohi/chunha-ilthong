@@ -104,3 +104,13 @@ h1, h2, h3 { font-family: var(--serif); margin: 0; }
 .log-item { font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--line); }
 .log-item.good { color: var(--good); }
 .log-item.bad { color: var(--red); }
+
+/* 첫 화면 진행 방법 */
+.howto { margin: 0; padding: 10px 14px 10px 32px; background: rgba(255,255,255,.45); border: 1px solid var(--line, #C9C0AE); border-radius: 10px; display: grid; gap: 2px; }
+.howto b { font-weight: 600; }
+/* 수송 요약 */
+.range { accent-color: #B5432F; }
+.summary { padding: 10px 12px; border-radius: 8px; background: rgba(30,28,26,.06); line-height: 1.5; }
+/* 키보드 초점이 보이게 */
+.modal:focus { outline: none; }
+.modal :focus-visible, .title :focus-visible { outline: 3px solid #B5432F; outline-offset: 2px; }
