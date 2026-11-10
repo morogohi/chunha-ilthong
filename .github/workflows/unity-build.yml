@@ -32,4 +32,6 @@ jobs:
           targetPlatform: ${{ inputs.target }}
           buildMethod: Chunha.EditorTools.ChunhaSetup.CIBuild
       - uses: actions/upload-artifact@v4
-        with: { name: build-${{ inputs.target }}, path: build }
+        with:
+          name: build-${{ inputs.target }}
+          path: build
