@@ -60,6 +60,7 @@ test('정책·지원 페이지: 스토어 심사에 필요한 내용이 있다',
   await page.goto('/privacy.html');
   await expect(page.getByRole('heading', { name: '개인정보처리방침' })).toBeVisible();
   await expect(page.getByText('개인정보를 수집하지 않습니다').first()).toBeVisible();
+  await expect(page.getByText('Google AdMob', { exact: false }).first()).toBeVisible();
   await expect(page.getByText(/시행일 \d{4}년/)).toBeVisible();
   await page.goto('/support.html');
   await expect(page.getByRole('link', { name: '새 이슈 쓰기' })).toHaveAttribute('href', /github\.com\/morogohi\/chunha-ilthong\/issues\/new/);

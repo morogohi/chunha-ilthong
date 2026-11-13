@@ -1,5 +1,7 @@
 # Store listing — English
 
+> ⚠️ 2026-11-14: 스토어 출시본은 광고 포함 앱 **[morogohi/chunha-ilthong-app](https://github.com/morogohi/chunha-ilthong-app)** 으로 바뀌었습니다. 실제 등록 문구는 그 저장소의 `fastlane/metadata`·`store/ios-listing.md`를 쓰세요. 아래는 광고 없는 Unity 본편 기준 초안입니다.
+
 Check every limit in the store console before submitting.
 
 ## App Store

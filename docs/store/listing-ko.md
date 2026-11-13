@@ -1,5 +1,7 @@
 # 스토어 등록 문안 — 한국어
 
+> ⚠️ 2026-11-14: 스토어 출시본은 광고 포함 앱 **[morogohi/chunha-ilthong-app](https://github.com/morogohi/chunha-ilthong-app)** 으로 바뀌었습니다. 실제 등록 문구는 그 저장소의 `fastlane/metadata`·`store/ios-listing.md`를 쓰세요. 아래는 광고 없는 Unity 본편 기준 초안입니다.
+
 글자 수 제한은 2026년 11월 기준 각 스토어 콘솔 표기를 따른다. 제출 전에 콘솔에서 한 번 더 확인한다.
 
 ## App Store (App Store Connect)
